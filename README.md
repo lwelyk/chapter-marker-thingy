@@ -42,6 +42,11 @@ Adjust the maximum gap before it inserts a scene-based break (default is 12 minu
 python cmthingy.py -f video.mp4 --max-gap 15
 ```
 
+Limit the number of breaks per hour of video (useful when too many breaks are detected):
+```bash
+python cmthingy.py -f video.mp4 --max-breaks-per-hour 5
+```
+
 ## How it works
 
 The script runs ffmpeg to detect:
@@ -56,6 +61,8 @@ It scores each potential break point based on:
 - Scene changes (baseline)
 
 Only scene changes with a score of 3+ are used (ensures silence is nearby).
+
+When `--max-breaks-per-hour` is specified, it limits the total breaks based on video duration (e.g., a 45-minute video with `--max-breaks-per-hour 5` allows up to 4 breaks). It picks the highest-scoring breaks while keeping them at least 2 minutes apart to avoid clustering.
 
 ## Output
 

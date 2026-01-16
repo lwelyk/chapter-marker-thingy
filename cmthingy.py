@@ -36,6 +36,7 @@ def get_video_duration(video_file):
                 return hours * 3600 + minutes * 60 + seconds
     return None
 
+
 def get_files(directory, extensions):
     file_list = []
     for root, dirs, files in os.walk(directory):
@@ -248,15 +249,18 @@ def score_break_point(timestamp, black_spaces, silences, ideal_position):
     return score
 
 def find_optimal_breaks(video_duration, black_spaces, silences, scenes,
-                       max_gap_minutes=12, min_breaks=None):
+                       max_gap_minutes=12, max_breaks_per_hour=None):
     break_points = []
 
-    # pass 1: use all black frames
+    # pass 1: use all black frames with scores
     for black in black_spaces:
+        # score black frames based on duration (longer = better)
+        duration_score = min(black.get('duration', 0.5), 2.0) * 5
         break_points.append({
             'timestamp': black['center'],
             'type': 'black_frame',
-            'confidence': 'high'
+            'confidence': 'high',
+            'score': 10 + duration_score  # base score for black frames
         })
 
     break_points.sort(key=lambda x: x['timestamp'])
@@ -311,6 +315,44 @@ def find_optimal_breaks(video_duration, black_spaces, silences, scenes,
             })
 
     break_points.sort(key=lambda x: x['timestamp'])
+
+    # pass 3: limit breaks if max_breaks_per_hour is specified
+    if max_breaks_per_hour is not None and len(break_points) > 0:
+        import math
+        duration_hours = video_duration / 3600
+        max_breaks = max(1, math.ceil(duration_hours * max_breaks_per_hour))
+
+        if len(break_points) > max_breaks:
+            # greedy selection: pick best breaks while maintaining distribution
+            # sort by score (descending), then pick while avoiding clustering
+            candidates = sorted(break_points, key=lambda x: x.get('score', 0), reverse=True)
+            selected = []
+            min_distance = 120  # minimum 2 minutes between selected breaks
+
+            for candidate in candidates:
+                if len(selected) >= max_breaks:
+                    break
+
+                # check if too close to already selected breaks
+                too_close = False
+                for sel in selected:
+                    if abs(candidate['timestamp'] - sel['timestamp']) < min_distance:
+                        too_close = True
+                        break
+
+                if not too_close:
+                    selected.append(candidate)
+
+            # if we couldn't fill all slots due to clustering, relax the constraint
+            if len(selected) < max_breaks:
+                for candidate in candidates:
+                    if len(selected) >= max_breaks:
+                        break
+                    if candidate not in selected:
+                        selected.append(candidate)
+
+            break_points = sorted(selected, key=lambda x: x['timestamp'])
+
     return break_points
 
 def print_chapter_markers(break_points, silences=None):
@@ -382,7 +424,7 @@ def detect_scenes(video_file):
 
     return scenes
 
-def process_video_file(video_file, max_gap_minutes=12, write_chapters=False, overwrite=False):
+def process_video_file(video_file, max_gap_minutes=12, max_breaks_per_hour=None, write_chapters=False, overwrite=False):
     #run through each operation
     console.print(f"\n[bold magenta]Processing:[/bold magenta] {os.path.basename(video_file)}")
     console.print(f"[dim]{video_file}[/dim]")
@@ -415,7 +457,8 @@ def process_video_file(video_file, max_gap_minutes=12, write_chapters=False, ove
         black_spaces=cleaned_black_spaces,
         silences=silences,
         scenes=scenes,
-        max_gap_minutes=max_gap_minutes
+        max_gap_minutes=max_gap_minutes,
+        max_breaks_per_hour=max_breaks_per_hour
     )
 
     console.print(f"[bold green]Selected {len(optimal_breaks)} commercial break points[/bold green]")
@@ -451,6 +494,8 @@ Examples:
 
     parser.add_argument('--max-gap', type=int, default=12,
                        help='Maximum gap in minutes before inserting scene-based break (default: 12)')
+    parser.add_argument('--max-breaks-per-hour', type=float, default=None,
+                       help='Maximum number of breaks per hour of video (e.g., 5). When specified, selects the best breaks while maintaining distribution.')
     parser.add_argument('--write-chapters', action='store_true',
                        help='Write chapter markers to video file')
     parser.add_argument('--overwrite', action='store_true',
@@ -462,7 +507,7 @@ Examples:
         if not os.path.isfile(args.file):
             console.print(f"[red]Error: File not found: {args.file}[/red]")
             return 1
-        process_video_file(args.file, max_gap_minutes=args.max_gap, write_chapters=args.write_chapters, overwrite=args.overwrite)
+        process_video_file(args.file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite)
 
     elif args.dir:
         if not os.path.isdir(args.dir):
@@ -477,7 +522,7 @@ Examples:
         console.print(f"[bold cyan]Found {len(video_files)} video file(s)[/bold cyan]")
         for i, video_file in enumerate(video_files, 1):
             console.print(f"\n[bold]═══ File {i}/{len(video_files)} ═══[/bold]")
-            process_video_file(video_file, max_gap_minutes=args.max_gap, write_chapters=args.write_chapters, overwrite=args.overwrite)
+            process_video_file(video_file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite)
 
     return 0
 
