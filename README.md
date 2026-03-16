@@ -4,7 +4,7 @@ Automatically finds good places to put chapter markers in videos by detecting bl
 
 ## What it does
 
-If you've got old TV recordings with commercials still in them, this tool finds the commercial breaks and can add chapter markers so you can skip through them easily. It uses a two-pass approach:
+It uses a two-pass approach:
 
 1. First it looks for black frames (the natural commercial breaks)
 2. Then it finds in any big gaps with scene changes that also have silence nearby
