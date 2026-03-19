@@ -22,7 +22,7 @@ def get_video_duration(video_file):
         console.print(f"[red]Error: Video file not found: {video_file}[/red]")
         return None
 
-    command = f'{FFMPEG} -i "{video_file}"'
+    command = f'"{FFMPEG}" -i "{video_file}"'
     process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     _, error = process.communicate()
 
@@ -46,7 +46,7 @@ def get_files(directory, extensions):
     return file_list
 
 def detect_black_spaces(video_file):
-    command = f'{FFMPEG} -i "{video_file}" -vf fps=24,blackdetect=d=0.1 -an -f null -'
+    command = f'"{FFMPEG}" -i "{video_file}" -vf fps=24,blackdetect=d=0.1 -an -f null -'
     process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     _, error = process.communicate()
 
@@ -66,7 +66,7 @@ def detect_black_spaces(video_file):
     return black_spaces
 
 def detect_silence(video_file, noise_tolerance="-30dB", min_duration=0.3):
-    command = f'{FFMPEG} -i "{video_file}" -af silencedetect=noise={noise_tolerance}:d={min_duration} -f null -'
+    command = f'"{FFMPEG}" -i "{video_file}" -af silencedetect=noise={noise_tolerance}:d={min_duration} -f null -'
     process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     _, error = process.communicate()
 
@@ -175,7 +175,7 @@ def write_chapters_to_video(video_file, break_points, video_duration, output_fil
                 f.write(f"title=Chapter {chapter_num}\n")
 
         console.print(f"[bold yellow]Writing chapters to video file...[/bold yellow]")
-        command = f'{FFMPEG} -i "{video_file}" -i "{metadata_file}" -map_metadata 1 -codec copy -y "{output_file}"'
+        command = f'"{FFMPEG}" -i "{video_file}" -i "{metadata_file}" -map_metadata 1 -codec copy -y "{output_file}"'
 
         process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         _, error = process.communicate()
@@ -396,7 +396,7 @@ def print_chapter_markers(break_points, silences=None):
 
 def detect_scenes(video_file):
     # use scene detect filter
-    command = f'{FFMPEG} -i "{video_file}" -vf "select=\'gt(scene,0.4)\',showinfo" -vsync vfr -f null -'
+    command = f'"{FFMPEG}" -i "{video_file}" -vf "select=\'gt(scene,0.4)\',showinfo" -vsync vfr -f null -'
     process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     _, error = process.communicate()
 
