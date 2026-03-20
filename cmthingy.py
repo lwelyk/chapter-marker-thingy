@@ -11,7 +11,6 @@ FFMPEG = "/usr/bin/ffmpeg"
 console = Console()
 
 VIDEO_EXTENSIONS = ('.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v')
-
 def get_video_duration(video_file):
     if not os.path.isfile(FFMPEG):
         console.print(f"[red]Error: ffmpeg not found at {FFMPEG}[/red]")
@@ -36,6 +35,63 @@ def get_video_duration(video_file):
                 return hours * 3600 + minutes * 60 + seconds
     return None
 
+def get_current_chapter_markers(video_file):
+    command = f'"{FFMPEG}" -i "{video_file}"'
+    process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    _, error = process.communicate()
+    markers = []
+
+    pattern = re.compile(
+        r"Chapter #\d+:(\d+): start ([\d.]+), end ([\d.]+)\r?\n"
+        r"\s+Metadata:\r?\n"
+        r"\s+title\s*:\s*(.+)"
+    )
+    matches = pattern.findall(error.decode())
+    if len(matches) > 0:
+        for match in matches:
+            number, start, end, title = match
+            marker = {}
+            marker["number"] = int(number)
+            marker["start"] = float(start)
+            marker["end"] = float(end)
+            marker["title"] = str(title)
+            markers.append(marker)
+
+    if len(markers) < 1:
+        return markers
+    else:
+        print_existing_chapter_markers(markers)
+        return markers
+
+def print_existing_chapter_markers(markers):
+    table = Table(title="Existing Chapters", show_header=True, header_style="bold magenta")
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column("Timestamp Start", style="green", justify="center")
+    table.add_column("Timestamp End", style="yellow", justify="right")
+    table.add_column("Title", style="magenta", justify="center")
+
+    for i, mk in enumerate(markers, 1):
+        table.add_row(
+            str(i),
+            format_timestamp(mk["start"]),
+            format_timestamp(mk["end"]),
+            mk["title"]
+        )
+
+    console.print(table)
+
+def check_existing_markers_against_max(markers, max_breaks_per_hour, video_duration):
+    import math
+    duration_hours = video_duration / 3600
+    max_breaks = max(1, math.ceil(duration_hours * max_breaks_per_hour))
+
+    # compare current breaks against max breaks
+    # minus one to markers since marker 1 isn't a break
+    return {
+        "difference": (len(markers)-1) - max_breaks,
+        "max_breaks": max_breaks
+    }
+    
 
 def get_files(directory, extensions):
     file_list = []
@@ -424,7 +480,7 @@ def detect_scenes(video_file):
 
     return scenes
 
-def process_video_file(video_file, max_gap_minutes=12, max_breaks_per_hour=None, write_chapters=False, overwrite=False):
+def process_video_file(video_file, max_gap_minutes=12, max_breaks_per_hour=None, write_chapters=False, overwrite=False, respect_existing=False):
     #run through each operation
     console.print(f"\n[bold magenta]Processing:[/bold magenta] {os.path.basename(video_file)}")
     console.print(f"[dim]{video_file}[/dim]")
@@ -435,6 +491,20 @@ def process_video_file(video_file, max_gap_minutes=12, max_breaks_per_hour=None,
         return None
 
     console.print(f"[bold cyan]Video duration:[/bold cyan] {duration:.2f} seconds ({duration/60:.2f} minutes)")
+
+    if respect_existing:
+        console.print("[bold yellow]Detecting current chapter markers...[/bold yellow]")
+        current_markers = get_current_chapter_markers(video_file)
+        console.print(f"[green]Found {len(current_markers)} current markers[/green]")
+        if len(current_markers) > 1:
+            if max_breaks_per_hour:
+                console.print("[bold yellow]Checking current chapter markers against max breaks...[/bold yellow]")
+                diff = check_existing_markers_against_max(current_markers, max_breaks_per_hour, duration)
+                if diff["difference"] == 0:
+                    console.print(f"[green]Existing chapters meet max break requirements![/green]")
+                else:
+                    console.print(f"[red]Found {len(current_markers)-1} breakpoints. Desired breakpoints {diff["max_breaks"]}[/red]")
+            return None 
 
     console.print("[bold yellow]Detecting black spaces...[/bold yellow]")
     black_spaces = detect_black_spaces(video_file)
@@ -500,6 +570,8 @@ Examples:
                        help='Write chapter markers to video file')
     parser.add_argument('--overwrite', action='store_true',
                        help='Overwrite original file instead of creating .chapters file')
+    parser.add_argument('--respect-existing', action='store_true',
+                       help='Respect existing chapters in file, only reports differences')
 
     args = parser.parse_args()
 
@@ -507,7 +579,7 @@ Examples:
         if not os.path.isfile(args.file):
             console.print(f"[red]Error: File not found: {args.file}[/red]")
             return 1
-        process_video_file(args.file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite)
+        process_video_file(args.file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite, respect_existing=args.respect_existing)
 
     elif args.dir:
         if not os.path.isdir(args.dir):
@@ -522,7 +594,7 @@ Examples:
         console.print(f"[bold cyan]Found {len(video_files)} video file(s)[/bold cyan]")
         for i, video_file in enumerate(video_files, 1):
             console.print(f"\n[bold]═══ File {i}/{len(video_files)} ═══[/bold]")
-            process_video_file(video_file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite)
+            process_video_file(video_file, max_gap_minutes=args.max_gap, max_breaks_per_hour=args.max_breaks_per_hour, write_chapters=args.write_chapters, overwrite=args.overwrite, respect_existing=args.respect_existing)
 
     return 0
 

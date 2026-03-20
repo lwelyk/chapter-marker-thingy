@@ -47,6 +47,11 @@ Limit the number of breaks per hour of video (useful when too many breaks are de
 python cmthingy.py -f video.mp4 --max-breaks-per-hour 5
 ```
 
+Respect any existing chapters and report on differences with max-breaks-per-hour flag (useful for already well-tagged files):
+```bash
+python cmthingy.py -f video.mp4 --respect-existing
+```
+
 ## How it works
 
 The script runs ffmpeg to detect:
