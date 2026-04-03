@@ -151,13 +151,12 @@ def write_chapters_to_video(video_file, break_points, video_duration, output_fil
         with open(metadata_file, 'w', encoding='utf-8') as f:
             f.write(";FFMETADATA1\n")
 
-            # add chapter 1 from start if first break is far enough in
-            if break_points[0]['timestamp'] > 30:
-                f.write("\n[CHAPTER]\n")
-                f.write("TIMEBASE=1/1000\n")
-                f.write("START=0\n")
-                f.write(f"END={int(break_points[0]['timestamp'] * 1000)}\n")
-                f.write("title=Chapter 1\n")
+            # add chapter 1 starting at the beginning
+            f.write("\n[CHAPTER]\n")
+            f.write("TIMEBASE=1/1000\n")
+            f.write("START=0\n")
+            f.write(f"END={int(break_points[0]['timestamp'] * 1000)}\n")
+            f.write("title=Chapter 1\n")
 
             for i, bp in enumerate(break_points):
                 start_time = bp['timestamp']
@@ -166,7 +165,7 @@ def write_chapters_to_video(video_file, break_points, video_duration, output_fil
                 else:
                     end_time = video_duration
 
-                chapter_num = i + 2 if break_points[0]['timestamp'] > 30 else i + 1
+                chapter_num = i + 2
 
                 f.write("\n[CHAPTER]\n")
                 f.write("TIMEBASE=1/1000\n")
